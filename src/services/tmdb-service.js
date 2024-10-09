@@ -12,6 +12,28 @@ export default class TmdbService {
     return result
   }
 
+  async getMoviesResource(query, page) {
+    const options = {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+        Authorization:
+          'Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJjZWRjZmZkNWQxNmY3MzQwYmEyYzRlYjgzMjJiM2NmMyIsIm5iZiI6MTcyNzg3NDgyOC41NTQwMjIsInN1YiI6IjY2ZmQ0MTdiZTI2YTUzYzEyMjU5NWM0YiIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.sJbvLjdx6YU1fTUXj-emD2efq4m6B_4RrOM6Qz6TXL0',
+      },
+    }
+
+    const response = await this.getResource(
+      `/search/movie?query=${query}&include_adult=true&language=en-US&page=${page}`,
+      options
+    )
+
+    // console.log(response)
+
+    // const moviesArr = response.map((el) => TmdbService.transformMovie(el))
+
+    return response
+  }
+
   async getMovies(query) {
     const options = {
       method: 'GET',
@@ -27,12 +49,16 @@ export default class TmdbService {
       options
     ).then((res) => res.results)
 
+    // const response = await this.getResource(
+    //   `/search/movie?query=${query}&include_adult=true&language=en-US&page=1`,
+    //   options
+    // )
+
     console.log(response)
 
-    const newArr = response.map((el) => TmdbService.transformMovie(el))
+    const moviesArr = response.map((el) => TmdbService.transformMovie(el))
 
-    return newArr
-    // return result
+    return moviesArr
   }
 
   static transformMovie(movie) {

@@ -1,19 +1,24 @@
 /* eslint no-unused-vars: 0 */
+/* eslint react/no-unused-state: 0 */
+/* eslint prefer-destructuring: 0 */
 /* eslint react/jsx-boolean-value: 1 */
 /* eslint react/state-in-constructor: 0 */
 /* eslint react/no-unused-class-component-methods: 0 */
 
 import { LeftCircleTwoTone, LoadingOutlined } from '@ant-design/icons'
 import './App.css'
-import { Card, Flex, Typography, Tag, Space, ConfigProvider, Spin, Alert } from 'antd'
+import { Card, Flex, Typography, Tag, Space, ConfigProvider, Spin, Alert, List, Pagination, Input } from 'antd'
 import Title from 'antd/es/typography/Title'
 import { Component, useState } from 'react'
 import { Header } from 'antd/es/layout/layout'
 import Paragraph from 'antd/es/typography/Paragraph'
 import ErrorBoundary from 'antd/es/alert/ErrorBoundary'
+import { Offline, Online } from 'react-detect-offline'
+import { debounce } from 'lodash'
 
 import MovieList from '../movie-list/MovieList'
 import TmdbService from '../../services/tmdb-service'
+import Movie from '../movie/Movie'
 
 const { Text } = Typography
 
@@ -49,18 +54,62 @@ export default class App extends Component {
 
   state = {
     movies: [],
-    loading: true,
+    totalResults: null,
+    currentPage: 1,
+    loading: false,
     error: false,
+    searchQuery: '',
+    isInitial: true,
+    hasMovies: false,
   }
 
-  constructor() {
-    super()
-    this.updateMovies()
+  componentDidMount() {
+    // const { currentPage, searchQuery } = this.state
+    // this.updateMovies(searchQuery, currentPage)
+    // this.setState({isInitial: false})
+    // console.log('mounted')
   }
 
-  updateMovies = () => {
-    this.tmdbService.getMovies('remove').then(this.onMoviesLoaded).catch(this.onError)
+  // updateMovies = () => {
+  //   this.tmdbService.getMovies('remove').then(this.onMoviesLoaded).catch(this.onError)
+  // }
+
+  handleChangeInput = debounce((query) => {
+    const { currentPage } = this.state
+    this.updateMovies(query, currentPage)
+  }, 500)
+
+  updateMovies = (query, page) => {
+    this.setState({ loading: true, isInitial: false, hasMovies: true })
+    this.tmdbService
+      .getMoviesResource(query, page)
+      .then((res) => {
+        // const { movies } = this.state
+        this.setState({
+          currentPage: page,
+          movies: res.results.map((el) => TmdbService.transformMovie(el)),
+          totalResults: res.total_results,
+          loading: false,
+          searchQuery: query,
+          isInitial: !query,
+          hasMovies: res.results.length > 0,
+        })
+        // console.log(movies)
+      })
+      .catch(this.onError)
   }
+
+  // updateMovies = () => {
+  //   this.tmdbService
+  //     .getMoviesResource('remove')
+  //     .then((res) => {
+  //       console.log(res)
+
+  //       return res.results
+  //     })
+  //     .then(this.onMoviesLoaded)
+  //     .catch(this.onError)
+  // }
 
   onMoviesLoaded = (movies) => {
     this.setState({ movies, loading: false })
@@ -74,13 +123,26 @@ export default class App extends Component {
   }
 
   render() {
-    const { movies, error, loading } = this.state
+    const { movies, totalResults, error, loading, currentPage, searchQuery, isInitial, hasMovies } = this.state
+
+    const initialText = isInitial ? <Text type="secondary">Введите ваш запрос</Text> : null
 
     const hasData = !(loading || error)
+    const noData = !hasMovies && !isInitial ? <Text type="secondary">Ничего не найдено</Text> : null
 
     const errorMessage = error ? <Alert message="Error Text" type="error" /> : null
     const spinner = loading ? <Spin indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />} /> : null
-    const content = hasData ? <MovieList movies={movies} /> : null
+    const content =
+      hasData && !isInitial && !noData ? (
+        <MovieList
+          movies={movies}
+          totalResults={totalResults}
+          isLoading={loading}
+          onMoviesUpdate={this.updateMovies}
+          currentPage={currentPage}
+          searchQuery={searchQuery}
+        />
+      ) : null
 
     return (
       <section
@@ -92,15 +154,25 @@ export default class App extends Component {
           paddingLeft: 32,
         }}
       >
-        <LeftCircleTwoTone spin style={{ fontSize: '50px' }} />
-        <ErrorBoundary>
-          {errorMessage}
-          {spinner}
-          {content}
-        </ErrorBoundary>
-        {/* {errorMessage}
-        {spinner}
-        {content} */}
+        <Online>
+          <LeftCircleTwoTone spin style={{ fontSize: '50px' }} />
+          <Input
+            placeholder="Название фильма"
+            onChange={(e) => {
+              this.handleChangeInput(e.target.value)
+            }}
+          />
+          <ErrorBoundary>
+            {errorMessage}
+            {initialText}
+            {noData}
+            {spinner}
+            {content}
+          </ErrorBoundary>
+        </Online>
+        <Offline>
+          <Alert message="You're offline right now. Check your connection." type="error" />
+        </Offline>
       </section>
     )
   }
