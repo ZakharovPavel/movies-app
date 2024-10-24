@@ -2,13 +2,11 @@ import { List } from 'antd'
 
 import Movie from '../movie/Movie'
 
-export default function MovieList({
-  movies = [],
-  totalResults = null,
-  isLoading = false,
-  onMoviesUpdate = () => {},
-  currentPage = 1,
-  searchQuery = '',
+export default function RatedMovieList({
+  ratedMovies = [],
+  ratedTotalResults = null,
+  onRatedMoviesUpdate = () => {},
+  ratedCurrentPage = 1,
   bufferedMoviesRate = {},
 }) {
   return (
@@ -19,17 +17,16 @@ export default function MovieList({
           { xs: 4, sm: 4, md: 20, lg: 20 },
         ],
       }}
-      loading={isLoading}
       pagination={{
         align: 'center',
         pageSize: '20',
-        current: currentPage,
-        total: totalResults,
+        current: ratedCurrentPage,
+        total: ratedTotalResults,
         onChange: (page) => {
-          onMoviesUpdate(searchQuery, page)
+          onRatedMoviesUpdate(page)
         },
       }}
-      dataSource={movies}
+      dataSource={ratedMovies}
       renderItem={(item) => {
         return (
           <List.Item key={item.id}>
@@ -37,7 +34,6 @@ export default function MovieList({
           </List.Item>
         )
       }}
-      style={{ paddingTop: '34px' }}
     />
   )
 }

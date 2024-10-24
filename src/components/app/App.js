@@ -1,59 +1,24 @@
-/* eslint no-unused-vars: 0 */
-/* eslint react/no-unused-state: 0 */
-/* eslint prefer-destructuring: 0 */
-/* eslint react/jsx-boolean-value: 1 */
-/* eslint react/state-in-constructor: 0 */
-/* eslint react/no-unused-class-component-methods: 0 */
-
 import { LeftCircleTwoTone, LoadingOutlined } from '@ant-design/icons'
 import './App.css'
-import { Card, Flex, Typography, Tag, Space, ConfigProvider, Spin, Alert, List, Pagination, Input } from 'antd'
-import Title from 'antd/es/typography/Title'
-import { Component, useState } from 'react'
-import { Header } from 'antd/es/layout/layout'
-import Paragraph from 'antd/es/typography/Paragraph'
+import { Typography, Spin, Alert, Input, Tabs, Button } from 'antd'
+import { Component } from 'react'
 import ErrorBoundary from 'antd/es/alert/ErrorBoundary'
 import { Offline, Online } from 'react-detect-offline'
 import { debounce } from 'lodash'
 
 import MovieList from '../movie-list/MovieList'
-import TmdbService from '../../services/tmdb-service'
-import Movie from '../movie/Movie'
+import TmdbService from '../../services/TmdbService'
+import { TmdbServiceProvider } from '../tmdb-service-context'
+import RatedMovieList from '../rated-movie-list/RatedMovieList'
 
 const { Text } = Typography
 
 export default class App extends Component {
-  initialMovies = [
-    {
-      posterPath: 'https://m.media-amazon.com/images/M/MV5BMTQ2MTgxNTU3Ml5BMl5BanBnXkFtZTcwMzg4OTAzMQ@@._V1_.jpg',
-      title: 'Cool movie 1',
-      releaseDate: 'Feb 2 2022',
-      genre: ['Action', 'Drama'],
-      overview: 'bla blabla blabla bla blablabla labla',
-      id: 1,
-    },
-    {
-      posterPath: 'https://m.media-amazon.com/images/M/MV5BMTQ2MTgxNTU3Ml5BMl5BanBnXkFtZTcwMzg4OTAzMQ@@._V1_.jpg',
-      title: 'Cool movie 2: Return',
-      releaseDate: 'Feb 2 2023',
-      genre: ['Action', 'Not drama'],
-      overview: 'bla blabla blabla bla labla',
-      id: 2,
-    },
-    {
-      posterPath: 'https://m.media-amazon.com/images/M/MV5BMTQ2MTgxNTU3Ml5BMl5BanBnXkFtZTcwMzg4OTAzMQ@@._V1_.jpg',
-      title: 'Cool movie 3: Revenge',
-      releaseDate: 'Feb 2 2024',
-      genre: ['Action', 'A little drama'],
-      overview: 'bla blabla blabla bla blablabla',
-      id: 3,
-    },
-  ]
-
   tmdbService = new TmdbService()
 
   state = {
     movies: [],
+    genres: [],
     totalResults: null,
     currentPage: 1,
     loading: false,
@@ -61,58 +26,95 @@ export default class App extends Component {
     searchQuery: '',
     isInitial: true,
     hasMovies: false,
+    guestSessionId: null,
+    ratedMovies: [],
+    ratedTotalResults: null,
+    ratedCurrentPage: 1,
+    hasRatedMovies: false,
+    ratedError: false,
+    bufferedMoviesRate: {},
   }
 
   componentDidMount() {
-    // const { currentPage, searchQuery } = this.state
-    // this.updateMovies(searchQuery, currentPage)
-    // this.setState({isInitial: false})
-    // console.log('mounted')
-  }
+    this.getGuestSession()
 
-  // updateMovies = () => {
-  //   this.tmdbService.getMovies('remove').then(this.onMoviesLoaded).catch(this.onError)
-  // }
+    this.getGenres()
+  }
 
   handleChangeInput = debounce((query) => {
     const { currentPage } = this.state
     this.updateMovies(query, currentPage)
   }, 500)
 
-  updateMovies = (query, page) => {
-    this.setState({ loading: true, isInitial: false, hasMovies: true })
+  getGuestSession = () => {
+    this.tmdbService.createGuestSession().then((res) => {
+      this.setState({
+        guestSessionId: res.guest_session_id,
+      })
+    })
+  }
+
+  getGenres = () => {
     this.tmdbService
-      .getMoviesResource(query, page)
+      .getGenres()
       .then((res) => {
-        // const { movies } = this.state
+        const { genres } = res
         this.setState({
-          currentPage: page,
-          movies: res.results.map((el) => TmdbService.transformMovie(el)),
-          totalResults: res.total_results,
-          loading: false,
-          searchQuery: query,
-          isInitial: !query,
-          hasMovies: res.results.length > 0,
+          genres,
         })
-        // console.log(movies)
       })
       .catch(this.onError)
   }
 
-  // updateMovies = () => {
-  //   this.tmdbService
-  //     .getMoviesResource('remove')
-  //     .then((res) => {
-  //       console.log(res)
+  updateMovies = (query, page) => {
+    const { ratedMovies } = this.state
+    this.setState({ loading: true, isInitial: false, hasMovies: true })
+    this.tmdbService
+      .getMoviesResource(query, page)
+      .then((res) => {
+        this.setState({
+          currentPage: page,
+          movies: res.results.map((el) => TmdbService.transformMovie(el, ratedMovies)),
+          totalResults: res.total_results,
+          loading: false,
+          searchQuery: query.trim(),
+          isInitial: !query,
+          hasMovies: res.results.length > 0,
+          error: false,
+        })
+      })
+      .catch(this.onError)
+  }
 
-  //       return res.results
-  //     })
-  //     .then(this.onMoviesLoaded)
-  //     .catch(this.onError)
-  // }
+  updateRatedMovies = (page = 1) => {
+    const { guestSessionId } = this.state
+    this.setState({ loading: true })
+    this.tmdbService
+      .getRatedMoviesResource(guestSessionId, page)
+      .then((res) => {
+        this.setState(() => ({
+          ratedCurrentPage: page,
+          ratedMovies: res.results.map((el) => TmdbService.transformRatedMovie(el)),
+          ratedTotalResults: res.total_results,
+          loading: false,
+          hasRatedMovies: res.results.length > 0,
+          ratedError: false,
+        }))
+      })
+      .catch(this.onRatedError)
+  }
 
-  onMoviesLoaded = (movies) => {
-    this.setState({ movies, loading: false })
+  onRateChange = (id, rate) => {
+    this.setState(({ movies, bufferedMoviesRate }) => {
+      const movie = movies.filter((el) => el.id === id)[0]
+      const newMovie = {
+        ...bufferedMoviesRate,
+        [movie.id]: rate,
+      }
+      return {
+        bufferedMoviesRate: newMovie,
+      }
+    })
   }
 
   onError = () => {
@@ -122,15 +124,49 @@ export default class App extends Component {
     })
   }
 
+  onRatedError = () => {
+    this.setState({
+      ratedError: true,
+      loading: false,
+    })
+  }
+
+  onTabChange = (activeKey) => {
+    const { ratedCurrentPage } = this.state
+    if (activeKey === 'ratedTab') {
+      this.updateRatedMovies(ratedCurrentPage)
+    }
+  }
+
   render() {
-    const { movies, totalResults, error, loading, currentPage, searchQuery, isInitial, hasMovies } = this.state
+    const {
+      movies,
+      totalResults,
+      error,
+      loading,
+      currentPage,
+      searchQuery,
+      isInitial,
+      hasMovies,
+      genres,
+      ratedMovies,
+      guestSessionId,
+      hasRatedMovies,
+      ratedTotalResults,
+      ratedCurrentPage,
+      ratedError,
+      bufferedMoviesRate,
+    } = this.state
 
     const initialText = isInitial ? <Text type="secondary">Введите ваш запрос</Text> : null
 
     const hasData = !(loading || error)
     const noData = !hasMovies && !isInitial ? <Text type="secondary">Ничего не найдено</Text> : null
+    const noRatedData = !hasRatedMovies && !loading ? <Text type="secondary">Ничего не найдено</Text> : null
 
-    const errorMessage = error ? <Alert message="Error Text" type="error" /> : null
+    const errorMessage = error ? <Alert message="Movies fetch error" type="error" /> : null
+    const ratedErrorMessage =
+      ratedError && hasRatedMovies ? <Alert message="Rated movies fetch error" type="error" /> : null
     const spinner = loading ? <Spin indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />} /> : null
     const content =
       hasData && !isInitial && !noData ? (
@@ -141,8 +177,56 @@ export default class App extends Component {
           onMoviesUpdate={this.updateMovies}
           currentPage={currentPage}
           searchQuery={searchQuery}
+          bufferedMoviesRate={bufferedMoviesRate}
         />
       ) : null
+
+    const ratedContent =
+      hasData && !noRatedData ? (
+        <RatedMovieList
+          ratedMovies={ratedMovies}
+          ratedTotalResults={ratedTotalResults}
+          isLoading={loading}
+          onRatedMoviesUpdate={this.updateRatedMovies}
+          ratedCurrentPage={ratedCurrentPage}
+          guestSessionId={guestSessionId}
+          bufferedMoviesRate={bufferedMoviesRate}
+        />
+      ) : null
+
+    const tabItems = [
+      {
+        key: 'searchTab',
+        label: 'Search',
+        children: (
+          <ErrorBoundary>
+            <Input
+              placeholder="Название фильма"
+              onChange={(e) => {
+                this.handleChangeInput(e.target.value.trim())
+              }}
+            />
+            {errorMessage}
+            {initialText}
+            {noData}
+            {spinner}
+            {content}
+          </ErrorBoundary>
+        ),
+      },
+      {
+        key: 'ratedTab',
+        label: 'Rated',
+        children: (
+          <ErrorBoundary>
+            {ratedErrorMessage}
+            {noRatedData}
+            {spinner}
+            {ratedContent}
+          </ErrorBoundary>
+        ),
+      },
+    ]
 
     return (
       <section
@@ -155,19 +239,26 @@ export default class App extends Component {
         }}
       >
         <Online>
-          <LeftCircleTwoTone spin style={{ fontSize: '50px' }} />
-          <Input
-            placeholder="Название фильма"
-            onChange={(e) => {
-              this.handleChangeInput(e.target.value)
-            }}
-          />
           <ErrorBoundary>
-            {errorMessage}
-            {initialText}
-            {noData}
-            {spinner}
-            {content}
+            <LeftCircleTwoTone spin style={{ fontSize: '50px' }} />
+            <TmdbServiceProvider
+              value={{
+                genres,
+                guestSessionId,
+                tmdbService: this.tmdbService,
+                updateRatedMovies: this.updateRatedMovies,
+                onRateChange: this.onRateChange,
+                bufferedMoviesRate,
+              }}
+            >
+              <Tabs
+                defaultActiveKey="searchTab"
+                items={tabItems}
+                onChange={this.onTabChange}
+                destroyInactiveTabPane
+                centered
+              />
+            </TmdbServiceProvider>
           </ErrorBoundary>
         </Online>
         <Offline>
