@@ -46,15 +46,8 @@ export default class App extends Component {
     this.updateMovies(query, currentPage)
   }, 500)
 
-  // getGuestSession = () => {
-  //   this.setState({
-  //     guestSessionId: 'b7aedf4c063d90cb0c6c4a0447108b96',
-  //   })
-  // }
-
   getGuestSession = () => {
     this.tmdbService.createGuestSession().then((res) => {
-      // console.log(res.guest_session_id)
       this.setState({
         guestSessionId: res.guest_session_id,
       })
